@@ -1,0 +1,60 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TransactionType {
+  BUY
+  SELL
+}
+
+model Stock {
+  id          String        @id @default(cuid())
+  companyName String
+  symbol      String        @unique
+  sector      String
+  dailyPrices DailyPrice[]
+  transactions Transaction[]
+  createdAt   DateTime      @default(now())
+}
+
+model DailyPrice {
+  id      String   @id @default(cuid())
+  stockId String
+  date    DateTime @db.Date
+
+  opening Decimal @db.Decimal(12, 2)
+  highest Decimal @db.Decimal(12, 2)
+  lowest  Decimal @db.Decimal(12, 2)
+  closing Decimal @db.Decimal(12, 2)
+  volume  Int
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@unique([stockId, date])
+  @@index([date])
+}
+
+model Transaction {
+  id         String          @id @default(cuid())
+  stockId    String
+  type       TransactionType
+  quantity   Int
+  price      Decimal         @db.Decimal(12, 2)
+  date       DateTime        @db.Date
+  profitLoss Decimal?        @db.Decimal(12, 2)
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([stockId, date])
+  @@index([date])
+}
