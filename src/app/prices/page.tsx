@@ -1,26 +1,28 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Stock = {
-  id: number;
+  id: string;
   companyName: string;
   symbol: string;
   sector: string;
 };
 
 type DailyPrice = {
-  id: number;
-  stockId: number;
-  companyName: string;
-  symbol: string;
+  id: string;
+  stockId: string;
   date: string;
   opening: number;
   highest: number;
   lowest: number;
   closing: number;
   volume: number;
+  stock: {
+    companyName: string;
+    symbol: string;
+  };
 };
 
 export default function PricesPage() {
@@ -36,24 +38,78 @@ export default function PricesPage() {
   const [volume, setVolume] = useState("");
 
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Load saved stocks and prices
-  useEffect(() => {
-    const savedStocks = localStorage.getItem("nse-stocks");
-    const savedPrices = localStorage.getItem("nse-prices");
+  // Load stocks and daily prices from Neon through our API.
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    if (savedStocks) {
-      setStocks(JSON.parse(savedStocks));
-    }
+      const [stocksResponse, pricesResponse] = await Promise.all([
+        fetch("/api/stocks", { cache: "no-store" }),
+        fetch("/api/prices", { cache: "no-store" }),
+      ]);
 
-    if (savedPrices) {
-      setPrices(JSON.parse(savedPrices));
+      const stocksData = await stocksResponse.json();
+      const pricesData = await pricesResponse.json();
+
+      if (!stocksResponse.ok) {
+        throw new Error(
+          stocksData.error || "Failed to load stock counters."
+        );
+      }
+
+      if (!pricesResponse.ok) {
+        throw new Error(
+          pricesData.error || "Failed to load daily prices."
+        );
+      }
+
+      const formattedPrices: DailyPrice[] = pricesData.map(
+        (price: any) => ({
+          id: price.id,
+          stockId: price.stockId,
+          date: String(price.date).slice(0, 10),
+          opening: Number(price.opening),
+          highest: Number(price.highest),
+          lowest: Number(price.lowest),
+          closing: Number(price.closing),
+          volume: Number(price.volume),
+          stock: {
+            companyName: price.stock.companyName,
+            symbol: price.stock.symbol,
+          },
+        })
+      );
+
+      setStocks(stocksData);
+      setPrices(formattedPrices);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading data."
+      );
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Record daily stock prices
-  function handleAddPrice(event: React.FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Record a daily stock price in Neon.
+  async function handleAddPrice(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
+
+    setMessage("");
+    setError("");
 
     if (
       !stockId ||
@@ -62,18 +118,9 @@ export default function PricesPage() {
       !highest ||
       !lowest ||
       !closing ||
-      !volume
+      volume === ""
     ) {
-      setMessage("Please complete all fields.");
-      return;
-    }
-
-    const selectedStock = stocks.find(
-      (stock) => stock.id === Number(stockId)
-    );
-
-    if (!selectedStock) {
-      setMessage("Please select a valid stock counter.");
+      setError("Please complete all fields.");
       return;
     }
 
@@ -89,7 +136,9 @@ export default function PricesPage() {
       !Number.isSafeInteger(tradedVolume) ||
       tradedVolume < 0
     ) {
-      setMessage("Enter valid positive prices and a whole-number volume.");
+      setError(
+        "Enter valid positive prices and a whole-number volume."
+      );
       return;
     }
 
@@ -97,46 +146,56 @@ export default function PricesPage() {
       high < Math.max(open, close, low) ||
       low > Math.min(open, close, high)
     ) {
-      setMessage("Please check your highest and lowest prices.");
+      setError("Please check your highest and lowest prices.");
       return;
     }
 
-    const duplicate = prices.some(
-      (price) =>
-        price.stockId === selectedStock.id && price.date === date
-    );
+    setSaving(true);
 
-    if (duplicate) {
-      setMessage("A price record already exists for this stock on this date.");
-      return;
+    try {
+      const response = await fetch("/api/prices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          stockId,
+          date,
+          opening: open,
+          highest: high,
+          lowest: low,
+          closing: close,
+          volume: tradedVolume,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Failed to record daily price."
+        );
+      }
+
+      setMessage("Daily stock price recorded successfully.");
+
+      setDate("");
+      setOpening("");
+      setHighest("");
+      setLowest("");
+      setClosing("");
+      setVolume("");
+
+      await loadData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while saving the price."
+      );
+    } finally {
+      setSaving(false);
     }
-
-    const newPrice: DailyPrice = {
-      id: Date.now(),
-      stockId: selectedStock.id,
-      companyName: selectedStock.companyName,
-      symbol: selectedStock.symbol,
-      date,
-      opening: open,
-      highest: high,
-      lowest: low,
-      closing: close,
-      volume: tradedVolume,
-    };
-
-    const updatedPrices = [newPrice, ...prices];
-
-    setPrices(updatedPrices);
-    localStorage.setItem("nse-prices", JSON.stringify(updatedPrices));
-
-    setDate("");
-    setOpening("");
-    setHighest("");
-    setLowest("");
-    setClosing("");
-    setVolume("");
-
-    setMessage("Daily stock price recorded successfully.");
   }
 
   return (
@@ -150,7 +209,9 @@ export default function PricesPage() {
         </a>
 
         <header className="mb-8 mt-6">
-          <h1 className="text-3xl font-bold">Daily Stock Prices</h1>
+          <h1 className="text-3xl font-bold">
+            Daily Stock Prices
+          </h1>
           <p className="mt-2 text-sm text-slate-500">
             Record and monitor daily trading prices for registered NSE counters.
           </p>
@@ -161,22 +222,32 @@ export default function PricesPage() {
             Record Daily Price
           </h2>
 
-          {stocks.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-slate-500">
+              Loading stock counters...
+            </p>
+          ) : stocks.length === 0 ? (
             <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
               No stock counters found. Please register a stock counter first.
             </p>
           ) : (
-            <form onSubmit={handleAddPrice} className="grid gap-5 md:grid-cols-2">
+            <form
+              onSubmit={handleAddPrice}
+              className="grid gap-5 md:grid-cols-2"
+            >
               <div>
                 <label className="mb-2 block text-sm font-medium">
                   Stock Counter
                 </label>
+
                 <select
                   value={stockId}
                   onChange={(event) => setStockId(event.target.value)}
+                  required
                   className="w-full rounded-lg border border-slate-300 px-4 py-3"
                 >
                   <option value="">Select a company</option>
+
                   {stocks.map((stock) => (
                     <option key={stock.id} value={stock.id}>
                       {stock.companyName} ({stock.symbol})
@@ -189,32 +260,58 @@ export default function PricesPage() {
                 <label className="mb-2 block text-sm font-medium">
                   Trading Date
                 </label>
+
                 <input
                   type="date"
                   value={date}
                   onChange={(event) => setDate(event.target.value)}
+                  required
                   className="w-full rounded-lg border border-slate-300 px-4 py-3"
                 />
               </div>
 
               {[
-                { label: "Opening Price (KES)", value: opening, setter: setOpening },
-                { label: "Highest Price (KES)", value: highest, setter: setHighest },
-                { label: "Lowest Price (KES)", value: lowest, setter: setLowest },
-                { label: "Closing Price (KES)", value: closing, setter: setClosing },
-                { label: "Trading Volume (Shares)", value: volume, setter: setVolume },
+                {
+                  label: "Opening Price (KES)",
+                  value: opening,
+                  setter: setOpening,
+                },
+                {
+                  label: "Highest Price (KES)",
+                  value: highest,
+                  setter: setHighest,
+                },
+                {
+                  label: "Lowest Price (KES)",
+                  value: lowest,
+                  setter: setLowest,
+                },
+                {
+                  label: "Closing Price (KES)",
+                  value: closing,
+                  setter: setClosing,
+                },
+                {
+                  label: "Trading Volume (Shares)",
+                  value: volume,
+                  setter: setVolume,
+                },
               ].map((field) => (
                 <div key={field.label}>
                   <label className="mb-2 block text-sm font-medium">
                     {field.label}
                   </label>
+
                   <input
                     type="number"
                     min="0"
                     step="any"
                     value={field.value}
-                    onChange={(event) => field.setter(event.target.value)}
+                    onChange={(event) =>
+                      field.setter(event.target.value)
+                    }
                     placeholder="Enter value"
+                    required
                     className="w-full rounded-lg border border-slate-300 px-4 py-3"
                   />
                 </div>
@@ -223,25 +320,43 @@ export default function PricesPage() {
               <div className="md:col-span-2">
                 <button
                   type="submit"
-                  className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
+                  disabled={saving}
+                  className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  + Record Daily Price
+                  {saving ? "Saving..." : "+ Record Daily Price"}
                 </button>
               </div>
             </form>
           )}
 
+          {error && (
+            <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
           {message && (
-            <p className="mt-4 text-sm font-medium text-emerald-700">
+            <p className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">
               {message}
             </p>
           )}
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-lg font-semibold">
-            Recorded Daily Prices
-          </h2>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">
+              Recorded Daily Prices
+            </h2>
+
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              Refresh
+            </button>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[850px] text-left text-sm">
@@ -261,27 +376,33 @@ export default function PricesPage() {
                 {prices.map((price) => (
                   <tr key={price.id} className="border-b border-slate-100">
                     <td className="py-4 font-medium">
-                      {price.companyName}
+                      {price.stock.companyName}
                       <span className="ml-1 text-emerald-700">
-                        ({price.symbol})
+                        ({price.stock.symbol})
                       </span>
                     </td>
+
                     <td className="py-4">{price.date}</td>
                     <td className="py-4">{price.opening.toFixed(2)}</td>
                     <td className="py-4">{price.highest.toFixed(2)}</td>
                     <td className="py-4">{price.lowest.toFixed(2)}</td>
+
                     <td className="py-4 font-semibold">
                       {price.closing.toFixed(2)}
                     </td>
+
                     <td className="py-4">
                       {price.volume.toLocaleString()}
                     </td>
                   </tr>
                 ))}
 
-                {prices.length === 0 && (
+                {!loading && prices.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-500">
+                    <td
+                      colSpan={7}
+                      className="py-8 text-center text-slate-500"
+                    >
                       No daily prices recorded yet.
                     </td>
                   </tr>
