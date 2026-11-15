@@ -346,12 +346,12 @@ export default function Home() {
       {/* Sidebar */}
       <aside className="w-full border-b border-slate-200 bg-slate-950 p-6 text-white md:min-h-screen md:w-64 md:border-b-0 md:border-r">
         <div className="mb-10">
-          <h1 className="text-xl font-bold tracking-wide">
-            NSE<span className="text-emerald-400">TRACK</span>
-          </h1>
-          <p className="mt-1 text-xs text-slate-400">
-            Capital Market Portfolio
-          </p>
+         <h1 className="text-xl font-bold tracking-wide">
+  Soko<span className="text-emerald-400">Track</span>
+</h1>
+<p className="mt-1 text-xs text-slate-400">
+  Kenya Stock Portfolio Management
+</p>
         </div>
 
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -393,7 +393,7 @@ export default function Home() {
 
         <div className="mt-12 rounded-xl border border-slate-700 p-4">
           <p className="text-sm font-semibold">
-            NSE Portfolio Tracker
+            SokoTrack
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-400">
             Monitor stock prices, investments and portfolio performance.
@@ -856,7 +856,7 @@ export default function Home() {
         )}
 
         <footer className="mt-8 text-center text-xs text-slate-400">
-          NSE Portfolio Tracker · Educational demonstration project
+         SokoTrack · Kenya Stock Portfolio Management System
         </footer>
       </main>
     </div>

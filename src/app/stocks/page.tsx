@@ -142,11 +142,11 @@ export default function StocksPage() {
 
         <div className="mb-10">
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">
-            NSE Portfolio Tracker
+            SokoTrack
           </p>
 
           <h1 className="mt-2 text-3xl font-bold">
-            Stock Management
+          SokoTrack Counter Management
           </h1>
 
           <p className="mt-2 text-slate-400">

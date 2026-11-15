@@ -213,7 +213,7 @@ export default function PricesPage() {
             Daily Stock Prices
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Record and monitor daily trading prices for registered NSE counters.
+            Record and monitor daily trading prices for registered Nairobi Securities Exchange counters.
           </p>
         </header>
 
